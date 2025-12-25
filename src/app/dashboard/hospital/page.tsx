@@ -12,7 +12,7 @@ import {
   Wind,
 } from "lucide-react"
 
-import { mockPatients } from "@/lib/mock-data"
+import { mockPatients, createNewPatient } from "@/lib/mock-data"
 import type { Patient } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,18 +37,32 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 
-function AddBedDialog() {
+function AddBedDialog({ onAddPatient }: { onAddPatient: (newPatient: Patient) => void }) {
   const [open, setOpen] = React.useState(false);
   const { toast } = useToast();
+  
+  const nextBedId = React.useMemo(() => {
+    const lastBed = mockPatients[mockPatients.length - 1];
+    if (!lastBed) return "101A";
+    const lastBedNum = parseInt(lastBed.bedId.slice(0, -1));
+    const lastBedChar = lastBed.bedId.slice(-1);
+    
+    if (lastBedChar === 'D') {
+      return `${lastBedNum + 1}A`;
+    }
+    return `${lastBedNum}${String.fromCharCode(lastBedChar.charCodeAt(0) + 1)}`;
+
+  }, [mockPatients]);
+
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const bedId = formData.get("bedId");
-    const patientName = formData.get("patientName");
+    const bedId = formData.get("bedId") as string;
+    const patientName = formData.get("patientName") as string;
     
-    // In a real app, you would make an API call here.
-    console.log("Adding new bed:", { bedId, patientName });
+    const newPatient = createNewPatient(patientName, bedId);
+    onAddPatient(newPatient);
     
     toast({
       title: "Bed Added Successfully",
@@ -83,7 +97,7 @@ function AddBedDialog() {
               <Input
                 id="patientName"
                 name="patientName"
-                defaultValue="New Patient"
+                placeholder="Enter patient's name"
                 className="col-span-3"
                 required
               />
@@ -92,7 +106,7 @@ function AddBedDialog() {
               <Label htmlFor="bedId" className="text-right">
                 Bed ID
               </Label>
-              <Input id="bedId" name="bedId" defaultValue="201A" className="col-span-3" required />
+              <Input id="bedId" name="bedId" defaultValue={nextBedId} className="col-span-3" required />
             </div>
           </div>
           <DialogFooter>
@@ -159,6 +173,14 @@ function PatientCard({ patient }: { patient: Patient }) {
 }
 
 export default function HospitalDashboard() {
+  const [patients, setPatients] = React.useState<Patient[]>(mockPatients);
+
+  const handleAddPatient = (newPatient: Patient) => {
+    setPatients(prevPatients => [...prevPatients, newPatient]);
+    // Also update mockPatients so new patient is available on other pages
+    mockPatients.push(newPatient);
+  };
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -166,10 +188,10 @@ export default function HospitalDashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Hospital Dashboard</h1>
             <p className="text-muted-foreground">Overview of all patient statuses.</p>
         </div>
-        <AddBedDialog />
+        <AddBedDialog onAddPatient={handleAddPatient} />
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {mockPatients.map(patient => (
+        {patients.map(patient => (
           <PatientCard key={patient.id} patient={patient} />
         ))}
       </div>

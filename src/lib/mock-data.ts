@@ -42,6 +42,45 @@ const generateSleepPatterns = () => {
   return data;
 }
 
+export const createNewPatient = (name: string, bedId: string): Patient => {
+  const newId = (Math.max(...mockPatients.map(p => parseInt(p.id)), 0) + 1).toString();
+  return {
+    id: newId,
+    name,
+    bedId,
+    age: Math.floor(Math.random() * 50) + 30, // Age between 30 and 80
+    sex: Math.random() > 0.5 ? 'Male' : 'Female',
+    vitals: {
+      bloodPressure: `${110 + Math.floor(Math.random() * 20)}/${70 + Math.floor(Math.random() * 15)}`,
+      pulse: 70 + Math.floor(Math.random() * 15),
+      temperature: 36.5 + Math.random(),
+      spo2: 95 + Math.floor(Math.random() * 5),
+      respiratoryRate: 16 + Math.floor(Math.random() * 4),
+      history: {
+        bloodPressure: generateBPHistory(),
+        pulse: generateVitalsHistory(),
+        temperature: generateVitalsHistory(),
+      },
+    },
+    movement: {
+      lastMoved: 'Just now',
+      sleepPatterns: generateSleepPatterns(),
+    },
+    bed: {
+      position: 'Flat',
+      railsUp: true,
+    },
+    medications: [],
+    alerts: [],
+    reminders: [],
+    medicalHistory: ['N/A'],
+    mobility: 'Ambulatory',
+    skinCondition: 'Intact',
+    nutrition: 'Regular diet',
+  }
+};
+
+
 export const mockPatients: Patient[] = [
   {
     id: '1',
