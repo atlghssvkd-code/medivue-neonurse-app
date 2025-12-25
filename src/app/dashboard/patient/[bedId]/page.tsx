@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { mockPatients } from "@/lib/mock-data";
@@ -118,10 +119,21 @@ function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminde
 
 export default function PatientDashboardPage({ params }: { params: { bedId: string } }) {
   const router = useRouter();
-  const [patient, setPatient] = React.useState(mockPatients.find(p => p.bedId.toLowerCase() === params.bedId.toLowerCase()));
+  const [patient, setPatient] = React.useState<Patient | null>(null);
+
+  React.useEffect(() => {
+    const foundPatient = mockPatients.find(p => p.bedId.toLowerCase() === params.bedId.toLowerCase());
+    if (foundPatient) {
+      setPatient(foundPatient);
+    } else {
+      notFound();
+    }
+  }, [params.bedId]);
+
 
   if (!patient) {
-    notFound();
+    // You can return a loading state here if you want
+    return <div>Loading...</div>;
   }
   
   const handleReminderUpdate = (updatedReminder: Reminder) => {
@@ -258,5 +270,3 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
     </div>
   );
 }
-
-    
