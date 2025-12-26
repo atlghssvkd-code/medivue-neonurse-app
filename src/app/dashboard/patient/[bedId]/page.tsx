@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { mockPatients } from "@/lib/mock-data";
@@ -44,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DeviceConnector } from "@/components/device-connector";
+import { EditPatientDialog } from "./_components/edit-patient-dialog";
 
 
 function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminder, patient: Patient, onUpdate: (updatedReminder: Reminder) => void }) {
@@ -120,8 +120,8 @@ function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminde
 
 export default function PatientDashboardPage({ params }: { params: { bedId: string } }) {
   const router = useRouter();
-  const [patient, setPatient] = React.useState<Patient | null>(null);
   const { bedId } = params;
+  const [patient, setPatient] = React.useState<Patient | null>(null);
 
   React.useEffect(() => {
     const foundPatient = mockPatients.find(p => p.bedId.toLowerCase() === bedId.toLowerCase());
@@ -155,6 +155,17 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
         mockPatients[mockPatientIndex] = newPatientState;
       }
     }
+  };
+
+  const handlePatientUpdate = (updatedPatientData: Partial<Patient>) => {
+      const newPatientState = { ...patient, ...updatedPatientData };
+      setPatient(newPatientState);
+
+      // Also update the global mock data
+      const mockPatientIndex = mockPatients.findIndex(p => p.id === patient.id);
+      if (mockPatientIndex > -1) {
+        mockPatients[mockPatientIndex] = newPatientState;
+      }
   };
 
   const handleVitalsUpdate = (newVitals: Partial<Vitals>) => {
@@ -198,6 +209,7 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
           </div>
           <div className="flex items-center gap-4">
             <DeviceConnector onVitalsUpdate={handleVitalsUpdate} />
+            <EditPatientDialog patient={patient} onUpdate={handlePatientUpdate} />
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><User /> {patient.age} / {patient.sex.charAt(0)}</div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><BedDouble /> Bed {patient.bedId}</div>
           </div>
