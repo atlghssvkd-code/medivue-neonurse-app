@@ -43,7 +43,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { BluetoothManager } from "@/components/bluetooth-manager";
+import { DeviceConnector } from "@/components/device-connector";
 
 
 function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminder, patient: Patient, onUpdate: (updatedReminder: Reminder) => void }) {
@@ -196,7 +196,7 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
             <p className="text-muted-foreground">Detailed view for <span className="font-semibold text-primary">{patient.name}</span></p>
           </div>
           <div className="flex items-center gap-4">
-            <BluetoothManager onVitalsUpdate={handleVitalsUpdate} />
+            <DeviceConnector onVitalsUpdate={handleVitalsUpdate} />
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><User /> {patient.age} / {patient.sex.charAt(0)}</div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><BedDouble /> Bed {patient.bedId}</div>
           </div>
