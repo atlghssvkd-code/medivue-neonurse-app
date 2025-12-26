@@ -121,15 +121,16 @@ function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminde
 export default function PatientDashboardPage({ params }: { params: { bedId: string } }) {
   const router = useRouter();
   const [patient, setPatient] = React.useState<Patient | null>(null);
+  const { bedId } = params;
 
   React.useEffect(() => {
-    const foundPatient = mockPatients.find(p => p.bedId.toLowerCase() === params.bedId.toLowerCase());
+    const foundPatient = mockPatients.find(p => p.bedId.toLowerCase() === bedId.toLowerCase());
     if (foundPatient) {
       setPatient(foundPatient);
     } else {
       notFound();
     }
-  }, [params.bedId]);
+  }, [bedId]);
 
 
   if (!patient) {
