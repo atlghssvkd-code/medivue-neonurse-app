@@ -15,7 +15,7 @@ interface DeviceConnectorProps {
 
 export function DeviceConnector({ onVitalsUpdate }: DeviceConnectorProps) {
     const { toast } = useToast();
-    const [ipAddress, setIpAddress] = useState('10.187.241.46');
+    const [ipAddress, setIpAddress] = useState('');
     const [isMonitoring, setIsMonitoring] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const pollingRef = useRef<NodeJS.Timeout | null>(null);
