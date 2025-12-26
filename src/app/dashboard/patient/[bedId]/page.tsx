@@ -22,7 +22,7 @@ import {
   Siren,
   Edit,
 } from "lucide-react";
-import type { Patient, Reminder } from "@/lib/types";
+import type { Patient, Reminder, Vitals } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -43,6 +43,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { BluetoothManager } from "@/components/bluetooth-manager";
 
 
 function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminder, patient: Patient, onUpdate: (updatedReminder: Reminder) => void }) {
@@ -155,6 +156,24 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
     }
   };
 
+  const handleVitalsUpdate = (newVitals: Partial<Vitals>) => {
+    if (patient) {
+      const updatedPatient = {
+        ...patient,
+        vitals: {
+          ...patient.vitals,
+          ...newVitals,
+        },
+      };
+      setPatient(updatedPatient);
+      // Also update the global mock data
+      const mockPatientIndex = mockPatients.findIndex(p => p.id === patient.id);
+      if (mockPatientIndex > -1) {
+        mockPatients[mockPatientIndex] = updatedPatient;
+      }
+    }
+  };
+
 
   const getAlertInfo = (priority: 'Emergency' | 'High' | 'Medium' | 'Low') => {
     switch (priority) {
@@ -176,9 +195,10 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
             <h1 className="text-3xl font-bold tracking-tight">Patient Dashboard</h1>
             <p className="text-muted-foreground">Detailed view for <span className="font-semibold text-primary">{patient.name}</span></p>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2"><User /> {patient.age} / {patient.sex.charAt(0)}</div>
-            <div className="flex items-center gap-2"><BedDouble /> Bed {patient.bedId}</div>
+          <div className="flex items-center gap-4">
+            <BluetoothManager onVitalsUpdate={handleVitalsUpdate} />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><User /> {patient.age} / {patient.sex.charAt(0)}</div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><BedDouble /> Bed {patient.bedId}</div>
           </div>
       </div>
       
