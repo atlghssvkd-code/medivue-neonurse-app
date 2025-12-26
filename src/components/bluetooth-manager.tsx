@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Bluetooth, BluetoothConnected, BluetoothOff, Loader2 } from 'lucide-react';
@@ -19,16 +19,23 @@ interface BluetoothManagerProps {
 
 export function BluetoothManager({ onVitalsUpdate }: BluetoothManagerProps) {
     const { toast } = useToast();
+    const [isSupported, setIsSupported] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [device, setDevice] = useState<BluetoothDevice | null>(null);
 
+    useEffect(() => {
+        if (navigator.bluetooth) {
+            setIsSupported(true);
+        }
+    }, []);
+
     const handleConnect = async () => {
-        if (!navigator.bluetooth) {
+        if (!isSupported) {
             toast({
                 variant: 'destructive',
                 title: 'Web Bluetooth Not Supported',
-                description: 'Your browser does not support the Web Bluetooth API. Please use Chrome or Edge.',
+                description: 'Your browser or environment does not support the Web Bluetooth API.',
             });
             return;
         }
@@ -70,7 +77,10 @@ export function BluetoothManager({ onVitalsUpdate }: BluetoothManagerProps) {
             console.error('Bluetooth connection error:', error);
             if (error.name === 'NotFoundError') {
                  toast({ variant: 'destructive', title: 'Device Not Found', description: 'No devices found. Ensure your ESP32 is on and advertising.' });
-            } else {
+            } else if (error.name === 'NotAllowedError') {
+                 toast({ variant: 'destructive', title: 'Connection Failed', description: 'Access to Bluetooth is disallowed by a permissions policy.' });
+            }
+            else {
                  toast({ variant: 'destructive', title: 'Connection Failed', description: error.message });
             }
         } finally {
@@ -103,6 +113,14 @@ export function BluetoothManager({ onVitalsUpdate }: BluetoothManagerProps) {
         }
     };
 
+    if (!isSupported) {
+        return (
+            <Button disabled variant="outline" size="sm" title="Web Bluetooth is not supported in this browser or environment.">
+                <BluetoothOff className="mr-2 h-4 w-4" />
+                Bluetooth Not Supported
+            </Button>
+        );
+    }
 
     if (!isConnected) {
         return (
