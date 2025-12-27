@@ -6,36 +6,48 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Stethoscope, User, ArrowLeft } from "lucide-react";
+import { User, ArrowLeft } from "lucide-react";
 import Link from 'next/link';
 import { mockPatients } from '@/lib/mock-data';
+import { useAuth } from '@/firebase';
+import { signInAnonymously } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function PatientLoginPage() {
   const router = useRouter();
+  const auth = useAuth();
+  const { toast } = useToast();
   const [bedId, setBedId] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     if (!bedId.trim()) {
       setError('Bed ID is required.');
       return;
     }
-    if (!password) {
-      setError('Password is required.');
-      return;
-    }
     
-    // In a real app, you'd validate this against a backend.
-    // Here, we just check if it exists in mock data.
     const patientExists = mockPatients.some(p => p.bedId.toLowerCase() === bedId.trim().toLowerCase());
 
     if (patientExists) {
-      // For this demo, we are not checking the password.
-      router.push(`/dashboard/patient/${bedId.trim().toUpperCase()}`);
+      try {
+        await signInAnonymously(auth);
+        toast({
+          title: "Access Granted",
+          description: "Redirecting to patient dashboard...",
+        });
+        router.push(`/dashboard/patient/${bedId.trim().toUpperCase()}`);
+      } catch (err: any) {
+        setError('Anonymous sign-in failed. Please try again.');
+        toast({
+          variant: "destructive",
+          title: "Authentication Failed",
+          description: err.message,
+        });
+      }
     } else {
-      setError('Invalid Bed ID. Please try again.');
+      setError('Invalid Bed ID. Please check the ID and try again.');
     }
   };
 
@@ -70,21 +82,7 @@ export default function PatientLoginPage() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-lg">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setError('');
-                }}
-                className="text-lg p-6"
-                required
-              />
-            </div>
+            
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full text-lg p-6">
               Access Dashboard

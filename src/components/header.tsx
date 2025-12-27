@@ -17,12 +17,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useAuth, useUser } from "@/firebase"
 
 export function Header() {
     const router = useRouter();
+    const auth = useAuth();
+    const { user } = useUser();
 
     const handleLogout = () => {
-        // In a real app, you'd clear the session/token here.
+        auth.signOut();
         router.push('/');
     }
 
@@ -42,7 +45,7 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>{user?.isAnonymous ? "Patient" : (user?.email || "My Account")}</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />

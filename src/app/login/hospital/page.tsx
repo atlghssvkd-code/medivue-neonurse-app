@@ -8,22 +8,45 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Hospital, ArrowLeft } from "lucide-react";
 import Link from 'next/link';
+import { useAuth } from '@/firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 export default function HospitalLoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const auth = useAuth();
+  const { toast } = useToast();
+
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username || !password) {
-      setError('Username and password are required.');
+  const handleAuthAction = async (action: 'signIn' | 'signUp') => {
+    setError('');
+    if (!email || !password) {
+      setError('Email and password are required.');
       return;
     }
-    // In a real app, you would authenticate against a backend.
-    // For this demo, any input is valid.
-    router.push('/dashboard/hospital');
+    try {
+      if (action === 'signIn') {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
+      toast({
+        title: action === 'signIn' ? 'Login Successful' : 'Account Created',
+        description: "Redirecting to dashboard...",
+      });
+      router.push('/dashboard/hospital');
+    } catch (err: any) {
+      setError(err.message);
+      toast({
+        variant: "destructive",
+        title: "Authentication Failed",
+        description: err.message,
+      });
+    }
   };
 
   return (
@@ -35,40 +58,78 @@ export default function HospitalLoginPage() {
                     <Hospital className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                    <CardTitle className="text-3xl font-headline text-left">Hospital Login</CardTitle>
+                    <CardTitle className="text-3xl font-headline text-left">Hospital Access</CardTitle>
                     <CardDescription className="text-left">Admin access to all patient dashboards.</CardDescription>
                 </div>
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full !mt-6">
-              Login
-            </Button>
-          </form>
+          <Tabs defaultValue="login" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
+            <TabsContent value="login">
+              <form onSubmit={(e) => {e.preventDefault(); handleAuthAction('signIn')}} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email-login">Email</Label>
+                  <Input
+                    id="email-login"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password-login">Password</Label>
+                  <Input
+                    id="password-login"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <Button type="submit" className="w-full !mt-6">
+                  Login
+                </Button>
+              </form>
+            </TabsContent>
+            <TabsContent value="signup">
+              <form onSubmit={(e) => {e.preventDefault(); handleAuthAction('signUp')}} className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-signup">Email</Label>
+                    <Input
+                      id="email-signup"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password-signup">Password</Label>
+                    <Input
+                      id="password-signup"
+                      type="password"
+                      placeholder="Choose a password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  <Button type="submit" className="w-full !mt-6">
+                    Sign Up
+                  </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
       <Button variant="ghost" className="mt-8" asChild>
