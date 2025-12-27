@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Represents a patient in the hospital.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the patient."
+        },
+        "name": {
+          "type": "string",
+          "description": "Patient's full name."
+        },
+        "bedId": {
+          "type": "string",
+          "description": "The ID of the bed the patient is in."
+        },
+        "age": {
+          "type": "number",
+          "description": "Patient's age in years."
+        },
+        "sex": {
+          "type": "string",
+          "enum": ["Male", "Female"],
+          "description": "Patient's sex."
+        },
+        "medicalHistory": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of patient's medical history conditions."
+        },
+        "mobility": {
+          "type": "string",
+          "description": "Patient's mobility status."
+        },
+        "skinCondition": {
+          "type": "string",
+          "description": "Description of the patient's skin condition."
+        },
+        "nutrition": {
+          "type": "string",
+          "description": "Patient's nutritional status or diet."
+        }
+      },
+      "required": ["id", "name", "bedId", "age", "sex"]
+    },
+    "VitalsLog": {
+      "title": "Vitals Log",
+      "description": "A log of a patient's vital signs at a specific time.",
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the vital signs were recorded."
+        },
+        "bloodPressure": {
+          "type": "string",
+          "description": "Blood pressure reading (e.g., '120/80')."
+        },
+        "pulse": {
+          "type": "number",
+          "description": "Pulse rate in beats per minute."
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Body temperature in Celsius."
+        },
+        "spo2": {
+          "type": "number",
+          "description": "Blood oxygen saturation in percent."
+        },
+        "respiratoryRate": {
+          "type": "number",
+          "description": "Respiratory rate in breaths per minute."
+        }
+      },
+      "required": ["timestamp", "pulse", "spo2", "temperature"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": {
+        "$ref": "#/entities/Patient"
+      },
+      "description": "Stores individual patient documents."
+    },
+    "/patients/{patientId}/vitals-logs/{logId}": {
+      "schema": {
+        "$ref": "#/entities/VitalsLog"
+      },
+      "description": "Stores a time-series collection of vital sign logs for a specific patient."
+    }
+  },
+  "auth": {
+    "providers": []
+  }
+}
