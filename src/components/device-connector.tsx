@@ -43,8 +43,23 @@ export function DeviceConnector({ onVitalsUpdate }: DeviceConnectorProps) {
                 if (!response.ok) {
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
-                const data: Partial<Vitals> = await response.json();
-                onVitalsUpdate(data);
+                // Data from your ESP32 code
+                const espData: { temperature?: number, pulse?: number } = await response.json();
+                
+                // Map ESP32 data to the app's Vitals structure
+                const newVitals: Partial<Vitals> = {};
+                if (espData.temperature !== undefined) {
+                    // Your ESP32 sends 'bodytemperature', which we map to the app's 'temperature'
+                    newVitals.temperature = parseFloat(espData.temperature.toFixed(1));
+                }
+                if (espData.pulse !== undefined) {
+                    // Your ESP32 sends 'BPM', which we map to the app's 'pulse'
+                    newVitals.pulse = Math.round(espData.pulse);
+                }
+
+                if (Object.keys(newVitals).length > 0) {
+                    onVitalsUpdate(newVitals);
+                }
 
             } catch (error: any) {
                 console.error('Failed to fetch vitals:', error.message);
@@ -60,15 +75,29 @@ export function DeviceConnector({ onVitalsUpdate }: DeviceConnectorProps) {
 
         // Perform an initial fetch to validate the connection
         try {
-            await pollVitals();
+            // Awaiting the first poll to ensure connection is valid before setting state
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2500);
+            const initialResponse = await fetch(url, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (!initialResponse.ok) {
+                throw new Error(`Initial connection failed with status: ${initialResponse.status}`);
+            }
+
+            // If initial fetch is successful, start polling
             setIsMonitoring(true);
             setIsLoading(false);
             toast({ title: 'Monitoring Started', description: `Connected to device at ${ipAddress}.` });
-            // If initial fetch is successful, start polling every 3 seconds
             pollingRef.current = setInterval(pollVitals, 3000);
-        } catch (e) {
-            // Error toast is already handled in pollVitals
+        } catch (e: any) {
+            // Error toast is handled in the catch block
             setIsLoading(false);
+            stopMonitoring();
+             toast({
+                    variant: 'destructive',
+                    title: 'Connection Error',
+                    description: `Could not connect to ${ipAddress}. Check the IP and network.`,
+                });
         }
 
     }, [ipAddress, onVitalsUpdate, toast]);
@@ -78,10 +107,12 @@ export function DeviceConnector({ onVitalsUpdate }: DeviceConnectorProps) {
             clearInterval(pollingRef.current);
             pollingRef.current = null;
         }
-        setIsMonitoring(false);
+        if (isMonitoring) {
+            setIsMonitoring(false);
+            toast({ title: 'Monitoring Stopped' });
+        }
         setIsLoading(false);
-        toast({ title: 'Monitoring Stopped' });
-    }, [toast]);
+    }, [toast, isMonitoring]);
 
     return (
         <Popover>
