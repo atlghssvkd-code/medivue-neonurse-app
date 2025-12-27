@@ -1,102 +1,102 @@
 {
   "entities": {
-    "Patient": {
-      "title": "Patient",
-      "description": "Represents a patient in the hospital.",
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
       "type": "object",
+      "description": "Represents a user of the MediVue NeoNurse application.",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier for the patient."
+          "description": "Unique identifier for the user entity."
         },
-        "name": {
+        "username": {
           "type": "string",
-          "description": "Patient's full name."
+          "description": "The username of the user. This should be unique."
         },
-        "bedId": {
+        "role": {
           "type": "string",
-          "description": "The ID of the bed the patient is in."
-        },
-        "age": {
-          "type": "number",
-          "description": "Patient's age in years."
-        },
-        "sex": {
-          "type": "string",
-          "enum": ["Male", "Female"],
-          "description": "Patient's sex."
-        },
-        "medicalHistory": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of patient's medical history conditions."
-        },
-        "mobility": {
-          "type": "string",
-          "description": "Patient's mobility status."
-        },
-        "skinCondition": {
-          "type": "string",
-          "description": "Description of the patient's skin condition."
-        },
-        "nutrition": {
-          "type": "string",
-          "description": "Patient's nutritional status or diet."
+          "description": "Role of the user (e.g., 'admin', 'nurse').",
+          "format": "string"
         }
       },
-      "required": ["id", "name", "bedId", "age", "sex"]
+      "required": [
+        "id",
+        "username",
+        "role"
+      ]
     },
-    "VitalsLog": {
-      "title": "Vitals Log",
-      "description": "A log of a patient's vital signs at a specific time.",
+    "Bed": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Bed",
       "type": "object",
+      "description": "Represents a bed in the hospital.",
       "properties": {
-        "timestamp": {
+        "id": {
           "type": "string",
-          "format": "date-time",
-          "description": "The time the vital signs were recorded."
+          "description": "Unique identifier for the bed entity."
         },
-        "bloodPressure": {
+        "bedNumber": {
           "type": "string",
-          "description": "Blood pressure reading (e.g., '120/80')."
+          "description": "The bed number or identifier within the hospital."
         },
-        "pulse": {
-          "type": "number",
-          "description": "Pulse rate in beats per minute."
-        },
-        "temperature": {
-          "type": "number",
-          "description": "Body temperature in Celsius."
-        },
-        "spo2": {
-          "type": "number",
-          "description": "Blood oxygen saturation in percent."
-        },
-        "respiratoryRate": {
-          "type": "number",
-          "description": "Respiratory rate in breaths per minute."
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N Bed)"
         }
       },
-      "required": ["timestamp", "pulse", "spo2", "temperature"]
-    }
-  },
-  "firestore": {
-    "/patients/{patientId}": {
-      "schema": {
-        "$ref": "#/entities/Patient"
-      },
-      "description": "Stores individual patient documents."
-    },
-    "/patients/{patientId}/vitals-logs/{logId}": {
-      "schema": {
-        "$ref": "#/entities/VitalsLog"
-      },
-      "description": "Stores a time-series collection of vital sign logs for a specific patient."
+      "required": [
+        "id",
+        "bedNumber",
+        "userId"
+      ]
     }
   },
   "auth": {
-    "providers": []
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user information, including role (e.g., admin, nurse). Used for authentication and authorization. Includes the `userId` parameter for secure access control.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/beds/{bedId}",
+        "definition": {
+          "entityName": "Bed",
+          "schema": {
+            "$ref": "#/backend/entities/Bed"
+          },
+          "description": "Stores bed information, including bed number and a denormalized 'userId' for authorization independence. Enables users to manage the beds that they own and have access to.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user (owner)."
+            },
+            {
+              "name": "bedId",
+              "description": "The unique identifier for the bed."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore data structure is designed to support the MediVue NeoNurse application, focusing on real-time patient monitoring and bed management. It prioritizes authorization independence and clear security rules by adhering to the principles outlined in the prompt. The structure separates user and bed data to streamline access control and querying. Specifically:\n\n1.  **Authorization Independence:**  Since beds are linked to users, the `beds` collection denormalizes the `userId` field. This allows security rules to validate that a user has access to a bed's data without performing expensive `get()` operations.\n2.  **Clarity of Intent:** The structure explicitly separates user and bed data, making the purpose of each collection clear. The naming conventions (e.g., `userId`) are semantic and predictable.\n3.  **DBAC (Database-Based Access Control):** User roles are stored in the `/users/{userId}` document, allowing for role-based authorization within security rules without relying on custom claims.\n4.  **QAPs (Rules are not Filters):** Segregation is used to ensure only authorized users can `list` bed data. The path-based ownership (`/users/{userId}/beds/{bedId}`) allows efficient filtering for beds owned by a specific user.\n5.  **Invariants:** The structure supports invariants such as ownership (enforced by security rules) and potentially timestamps (although timestamps were not present in the original schema).\n\nThe use of path-based ownership (`/users/{userId}/beds/{bedId}`) is a deliberate choice to facilitate secure and efficient `list` operations.  This structure allows for easy querying of all beds associated with a specific user while ensuring that only authorized users can access this data."
   }
 }

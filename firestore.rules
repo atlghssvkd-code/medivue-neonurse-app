@@ -1,0 +1,125 @@
+/**
+ * This ruleset enforces a strict user-ownership security model for the MediVue
+ * NeoNurse application. The core philosophy is that users can only access data
+ * that exists within their own dedicated data tree, identified by their unique
+ * user ID.
+ *
+ * Data Structure:
+ * All application data is hierarchically nested under the `/users/{userId}` path.
+ * A user's profile is stored at `/users/{userId}`, and their associated data,
+ * such as hospital beds, is stored in subcollections like `/users/{userId}/beds/{bedId}`.
+ * This structure provides strong, path-based security guarantees.
+ *
+ * Key Security Decisions:
+ * - User Isolation: Users are strictly isolated. They cannot read, write, or even
+ *   list the data of other users. User enumeration is explicitly disallowed by
+ *   denying list access on the top-level `/users` collection.
+ * - Ownership Integrity: For any document created within a user's data tree,
+ *   the rules enforce that the document's internal data contains a field
+ *   (e.g., `userId`) that matches the user ID in the path. This creates a durable
+ *   and verifiable ownership link.
+ * - Default Secure: Access is denied by default. Permissions must be explicitly
+ *   granted through these rules. Write operations are never left open.
+ *
+ * Denormalization for Authorization:
+ * To ensure fast and secure authorization, the `Bed` documents under a user's
+ * subcollection contain a denormalized `userId` field. This allows the security
+ * rules to verify ownership directly from the document being accessed, avoiding
+ * slow and costly `get()` calls to parent documents.
+ *
+ * Structural Segregation:
+ * The data model uses structural segregation by placing each user's private data
+ * (like their list of beds) into a dedicated subcollection under their own user
+ * document. This is more secure and performant for list operations than a single
+ * global collection, as it allows rules to grant list access based on the path.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+
+    /**
+     * Returns true if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's UID matches the provided userId.
+     * This is the fundamental check for document ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Returns true if the user is the owner AND the document already exists.
+     * Used to protect update and delete operations from acting on non-existent data.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates that a user profile being created has an 'id' field
+     * that matches the document's path ID.
+     */
+    function isCreatingOwnUserDoc(userId) {
+      return request.resource.data.id == userId;
+    }
+
+    /**
+     * Enforces immutability of the user's ID field on update.
+     */
+    function isUpdatingOwnUserDoc() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * Validates that a bed document being created has its 'id' and 'userId' fields
+     * correctly set to match the wildcards in its path.
+     */
+    function isCreatingOwnBed(userId, bedId) {
+      return request.resource.data.userId == userId && request.resource.data.id == bedId;
+    }
+
+    /**
+     * Enforces immutability of a bed's 'id' and 'userId' fields on update.
+     */
+    function isUpdatingOwnBed() {
+      return request.resource.data.userId == resource.data.userId && request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * @description Controls access to user profile documents.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user with UID 'user123' creates their own profile document at '/users/user123'.
+     * @deny (list) Any user, authenticated or not, attempts to list all documents in the '/users' collection.
+     * @principle Restricts access to a user's own data tree and prevents user enumeration.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isCreatingOwnUserDoc(userId);
+      allow update: if isExistingOwner(userId) && isUpdatingOwnUserDoc();
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Controls access to a user's private subcollection of beds.
+       * @path /users/{userId}/beds/{bedId}
+       * @allow (list) An authenticated user with UID 'user123' lists all beds at '/users/user123/beds'.
+       * @deny (get) An authenticated user with UID 'user456' attempts to read a bed at '/users/user123/beds/bed_abc'.
+       * @principle Enforces document ownership for all operations within a user's private subcollection.
+       */
+      match /beds/{bedId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isCreatingOwnBed(userId, bedId);
+        allow update: if isExistingOwner(userId) && isUpdatingOwnBed();
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+  }
+}
