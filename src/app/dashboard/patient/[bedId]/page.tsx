@@ -1,7 +1,6 @@
 
 "use client";
 
-import { mockPatients } from "@/lib/mock-data";
 import { notFound, useRouter } from "next/navigation";
 import * as React from "react";
 import {
@@ -44,9 +43,12 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DeviceConnector } from "@/components/device-connector";
 import { EditPatientDialog } from "./_components/edit-patient-dialog";
+import { useCollection, useDoc, useFirestore, useMemoFirebase, useUser } from "@/firebase";
+import { collection, doc, query, where, limit, getDocs } from "firebase/firestore";
+import { updateDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 
-function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminder, patient: Patient, onUpdate: (updatedReminder: Reminder) => void }) {
+function EditReminderDialog({ reminder, patientDocRef, onUpdate }: { reminder: Reminder, patientDocRef: any, onUpdate: (updatedReminder: Reminder) => void }) {
   const [open, setOpen] = React.useState(false);
   const { toast } = useToast();
 
@@ -121,68 +123,79 @@ function EditReminderDialog({ reminder, patient, onUpdate }: { reminder: Reminde
 export default function PatientDashboardPage({ params }: { params: { bedId: string } }) {
   const router = useRouter();
   const { bedId } = params;
-  const [patient, setPatient] = React.useState<Patient | null>(null);
+  const firestore = useFirestore();
+  const { user } = useUser();
+  const [patientDocId, setPatientDocId] = React.useState<string | null>(null);
 
+  // Find the patient document ID based on bedId
   React.useEffect(() => {
-    const foundPatient = mockPatients.find(p => p.bedId.toLowerCase() === bedId.toLowerCase());
-    if (foundPatient) {
-      setPatient(foundPatient);
-    } else {
-      notFound();
-    }
-  }, [bedId]);
+    if (!user || !firestore) return;
 
+    const findPatient = async () => {
+      const bedsCollectionRef = collection(firestore, `users/${user.uid}/beds`);
+      const q = query(bedsCollectionRef, where("bedId", "==", bedId.toUpperCase()), limit(1));
+      
+      try {
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const patientDoc = querySnapshot.docs[0];
+          setPatientDocId(patientDoc.id);
+        } else {
+          // If no patient is found for the bedId, redirect or show not found
+          notFound();
+        }
+      } catch (error) {
+        console.error("Error finding patient by bedId:", error);
+        notFound();
+      }
+    };
 
-  if (!patient) {
-    // You can return a loading state here if you want
-    return <div>Loading...</div>;
+    findPatient();
+  }, [bedId, user, firestore]);
+
+  // Memoize the document reference
+  const patientDocRef = useMemoFirebase(() => {
+    if (!user || !patientDocId) return null;
+    return doc(firestore, `users/${user.uid}/beds`, patientDocId);
+  }, [firestore, user, patientDocId]);
+
+  // Use the useDoc hook to get real-time data for the patient
+  const { data: patient, isLoading } = useDoc<Patient>(patientDocRef);
+
+  if (isLoading || !patientDocRef) {
+    return <div>Loading patient data...</div>;
   }
   
+  if (!patient) {
+      // This can happen briefly or if the document is deleted.
+      // The useEffect above should handle redirection if the doc never existed.
+      return <div>Loading...</div>;
+  }
+
   const handleReminderUpdate = (updatedReminder: Reminder) => {
-    // This is where we would typically make an API call to update the backend.
-    // For this mock, we update the state directly.
+    if (!patient) return;
+    
     const reminderIndex = patient.reminders.findIndex(r => r.id === updatedReminder.id);
     if (reminderIndex > -1) {
       const newReminders = [...patient.reminders];
       newReminders[reminderIndex] = updatedReminder;
-
-      const newPatientState = { ...patient, reminders: newReminders };
-      setPatient(newPatientState);
-
-      // Also update the global mock data
-      const mockPatientIndex = mockPatients.findIndex(p => p.id === patient.id);
-      if (mockPatientIndex > -1) {
-        mockPatients[mockPatientIndex] = newPatientState;
-      }
+      updateDocumentNonBlocking(patientDocRef, { reminders: newReminders });
     }
   };
 
   const handlePatientUpdate = (updatedPatientData: Partial<Patient>) => {
-      const newPatientState = { ...patient, ...updatedPatientData };
-      setPatient(newPatientState);
-
-      // Also update the global mock data
-      const mockPatientIndex = mockPatients.findIndex(p => p.id === patient.id);
-      if (mockPatientIndex > -1) {
-        mockPatients[mockPatientIndex] = newPatientState;
-      }
+     if(patientDocRef) {
+       updateDocumentNonBlocking(patientDocRef, updatedPatientData);
+     }
   };
 
   const handleVitalsUpdate = (newVitals: Partial<Vitals>) => {
-    if (patient) {
-      const updatedPatient = {
-        ...patient,
-        vitals: {
-          ...patient.vitals,
-          ...newVitals,
-        },
+    if (patient && patientDocRef) {
+       const updatedVitals = {
+        ...patient.vitals,
+        ...newVitals,
       };
-      setPatient(updatedPatient);
-      // Also update the global mock data
-      const mockPatientIndex = mockPatients.findIndex(p => p.id === patient.id);
-      if (mockPatientIndex > -1) {
-        mockPatients[mockPatientIndex] = updatedPatient;
-      }
+      updateDocumentNonBlocking(patientDocRef, { vitals: updatedVitals });
     }
   };
 
@@ -235,7 +248,7 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
                 <CardContent className="space-y-4">
                     <div>
                         <h4 className="font-semibold mb-2 text-sm">Active Alerts</h4>
-                        {patient.alerts.length > 0 ? (
+                        {patient.alerts && patient.alerts.length > 0 ? (
                             <ul className="space-y-2">
                             {patient.alerts.map(alert => {
                                 const { variant, icon, className } = getAlertInfo(alert.priority);
@@ -255,7 +268,7 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
                     <Separator />
                     <div>
                         <h4 className="font-semibold mb-2 text-sm">Upcoming Reminders</h4>
-                        {patient.reminders.length > 0 ? (
+                        {patient.reminders && patient.reminders.length > 0 ? (
                             <ul className="space-y-2">
                                 {patient.reminders.map(reminder => (
                                 <li key={reminder.id} className="flex items-center justify-between group">
@@ -265,7 +278,7 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span className="text-sm font-semibold">{reminder.time}</span>
-                                      <EditReminderDialog reminder={reminder} patient={patient} onUpdate={handleReminderUpdate} />
+                                      <EditReminderDialog reminder={reminder} patientDocRef={patientDocRef} onUpdate={handleReminderUpdate} />
                                     </div>
                                 </li>
                                 ))}
@@ -282,19 +295,21 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
                     <CardTitle className="flex items-center gap-2"><Pill className="h-5 w-5 text-primary" /> Medication Schedule</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ul className="space-y-3">
-                        {patient.medications.map(med => (
-                        <li key={med.id} className="flex justify-between items-center">
-                            <div>
-                                <p className="font-medium">{med.name} <span className="text-sm text-muted-foreground">{med.dosage}</span></p>
-                                <p className="text-xs text-muted-foreground">Scheduled at {med.time}</p>
-                            </div>
-                            <Badge variant={med.status === 'Taken' ? 'default' : 'secondary'} className={med.status === 'Taken' ? 'bg-green-500' : ''}>
-                                {med.status}
-                            </Badge>
-                        </li>
-                        ))}
-                    </ul>
+                    {patient.medications && patient.medications.length > 0 ? (
+                      <ul className="space-y-3">
+                          {patient.medications.map(med => (
+                          <li key={med.id} className="flex justify-between items-center">
+                              <div>
+                                  <p className="font-medium">{med.name} <span className="text-sm text-muted-foreground">{med.dosage}</span></p>
+                                  <p className="text-xs text-muted-foreground">Scheduled at {med.time}</p>
+                              </div>
+                              <Badge variant={med.status === 'Taken' ? 'default' : 'secondary'} className={med.status === 'Taken' ? 'bg-green-500' : ''}>
+                                  {med.status}
+                              </Badge>
+                          </li>
+                          ))}
+                      </ul>
+                    ) : <p className="text-sm text-muted-foreground">No medication scheduled.</p>}
                 </CardContent>
             </Card>
             
@@ -303,3 +318,5 @@ export default function PatientDashboardPage({ params }: { params: { bedId: stri
     </div>
   );
 }
+
+    

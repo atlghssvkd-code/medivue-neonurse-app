@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -8,14 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, ArrowLeft } from "lucide-react";
 import Link from 'next/link';
-import { mockPatients } from '@/lib/mock-data';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { collectionGroup, getDocs, query, where, limit } from 'firebase/firestore';
 
 export default function PatientLoginPage() {
   const router = useRouter();
   const auth = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const [bedId, setBedId] = useState('');
   const [error, setError] = useState('');
@@ -23,31 +25,39 @@ export default function PatientLoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!bedId.trim()) {
+    const trimmedBedId = bedId.trim().toUpperCase();
+    if (!trimmedBedId) {
       setError('Bed ID is required.');
       return;
     }
     
-    const patientExists = mockPatients.some(p => p.bedId.toLowerCase() === bedId.trim().toLowerCase());
+    // Query Firestore to see if a patient with this bedId exists across all users
+    try {
+      const bedsQuery = query(
+        collectionGroup(firestore, 'beds'), 
+        where('bedId', '==', trimmedBedId), 
+        limit(1)
+      );
+      const querySnapshot = await getDocs(bedsQuery);
+      const patientExists = !querySnapshot.empty;
 
-    if (patientExists) {
-      try {
+      if (patientExists) {
         await signInAnonymously(auth);
         toast({
           title: "Access Granted",
           description: "Redirecting to patient dashboard...",
         });
-        router.push(`/dashboard/patient/${bedId.trim().toUpperCase()}`);
-      } catch (err: any) {
-        setError('Anonymous sign-in failed. Please try again.');
-        toast({
-          variant: "destructive",
-          title: "Authentication Failed",
-          description: err.message,
-        });
+        router.push(`/dashboard/patient/${trimmedBedId}`);
+      } else {
+        setError('Invalid Bed ID. Please check the ID and try again.');
       }
-    } else {
-      setError('Invalid Bed ID. Please check the ID and try again.');
+    } catch (err: any) {
+       setError('Authentication or database error. Please try again.');
+       toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: err.message,
+      });
     }
   };
 
@@ -96,3 +106,5 @@ export default function PatientLoginPage() {
     </div>
   );
 }
+
+    

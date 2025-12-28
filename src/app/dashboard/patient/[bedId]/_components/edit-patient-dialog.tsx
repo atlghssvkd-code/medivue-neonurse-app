@@ -29,22 +29,48 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
   const [open, setOpen] = React.useState(false);
   const { toast } = useToast();
 
+  // Use component state to manage form fields, initialized with patient data
+  const [formData, setFormData] = React.useState({
+    name: patient.name,
+    age: patient.age,
+    sex: patient.sex,
+    medicalHistory: patient.medicalHistory.join(', '),
+  });
+
+  // Update state when the patient prop changes (e.g., from Firestore updates)
+  React.useEffect(() => {
+    setFormData({
+      name: patient.name,
+      age: patient.age,
+      sex: patient.sex,
+      medicalHistory: patient.medicalHistory.join(', '),
+    });
+  }, [patient]);
+
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({...prev, [name]: value}));
+  }
+
+  const handleSexChange = (value: Patient['sex']) => {
+    setFormData(prev => ({...prev, sex: value}));
+  }
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const name = formData.get("name") as string;
-    const age = parseInt(formData.get("age") as string, 10);
-    const sex = formData.get("sex") as Patient['sex'];
-    const medicalHistory = (formData.get("medicalHistory") as string)
-      .split(',')
-      .map(s => s.trim());
-
-    const updatedData: Partial<Patient> = { name, age, sex, medicalHistory };
+    
+    const updatedData: Partial<Patient> = {
+       name: formData.name,
+       age: Number(formData.age),
+       sex: formData.sex,
+       medicalHistory: formData.medicalHistory.split(',').map(s => s.trim()),
+    };
     onUpdate(updatedData);
 
     toast({
       title: "Patient Details Updated",
-      description: `${name}'s information has been successfully saved.`,
+      description: `${formData.name}'s information has been successfully saved.`,
     });
     setOpen(false);
   };
@@ -73,7 +99,8 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
               <Input
                 id="name"
                 name="name"
-                defaultValue={patient.name}
+                value={formData.name}
+                onChange={handleChange}
                 className="col-span-3"
                 required
               />
@@ -86,7 +113,8 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
                 id="age"
                 name="age"
                 type="number"
-                defaultValue={patient.age}
+                value={formData.age}
+                onChange={handleChange}
                 className="col-span-3"
                 required
               />
@@ -95,7 +123,8 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
               <Label className="text-right">Sex</Label>
               <RadioGroup
                 name="sex"
-                defaultValue={patient.sex}
+                value={formData.sex}
+                onValueChange={handleSexChange}
                 className="col-span-3 flex gap-4"
               >
                 <div className="flex items-center space-x-2">
@@ -116,7 +145,8 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
                 id="medicalHistory"
                 name="medicalHistory"
                 placeholder="Comma-separated (e.g., Hypertension, Diabetes)"
-                defaultValue={patient.medicalHistory.join(', ')}
+                value={formData.medicalHistory}
+                onChange={handleChange}
                 className="col-span-3"
               />
             </div>
@@ -129,3 +159,5 @@ export function EditPatientDialog({ patient, onUpdate }: EditPatientDialogProps)
     </Dialog>
   );
 }
+
+    

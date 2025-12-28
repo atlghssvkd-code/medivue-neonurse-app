@@ -1,3 +1,4 @@
+
 "use client";
 import * as React from "react"
 import Link from "next/link"
@@ -11,8 +12,9 @@ import {
   User,
   Wind,
 } from "lucide-react"
+import { collection, addDoc, doc, setDoc } from "firebase/firestore";
 
-import { mockPatients, createNewPatient } from "@/lib/mock-data"
+import { createNewPatient } from "@/lib/mock-data"
 import type { Patient } from "@/lib/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,39 +38,47 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth, useCollection, useFirestore, useMemoFirebase, useUser } from "@/firebase";
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
-function AddBedDialog({ onAddPatient }: { onAddPatient: (newPatient: Patient) => void }) {
+function AddBedDialog() {
   const [open, setOpen] = React.useState(false);
   const { toast } = useToast();
-  
-  const nextBedId = React.useMemo(() => {
-    const lastBed = mockPatients[mockPatients.length - 1];
-    if (!lastBed) return "101A";
-    const lastBedNum = parseInt(lastBed.bedId.slice(0, -1));
-    const lastBedChar = lastBed.bedId.slice(-1);
-    
-    if (lastBedChar === 'D') {
-      return `${lastBedNum + 1}A`;
-    }
-    return `${lastBedNum}${String.fromCharCode(lastBedChar.charCodeAt(0) + 1)}`;
-
-  }, [mockPatients]);
-
+  const firestore = useFirestore();
+  const { user } = useUser();
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) {
+      toast({ variant: "destructive", title: "Authentication Error", description: "You must be logged in to add a patient." });
+      return;
+    }
+    
     const formData = new FormData(event.currentTarget);
     const bedId = formData.get("bedId") as string;
     const patientName = formData.get("patientName") as string;
     
+    // Using the same logic from mock-data to create a new patient structure
     const newPatient = createNewPatient(patientName, bedId);
-    onAddPatient(newPatient);
+
+    // Create a reference to the user's specific beds subcollection
+    const bedsCollectionRef = collection(firestore, `users/${user.uid}/beds`);
     
-    toast({
-      title: "Bed Added Successfully",
-      description: `Bed ${bedId} for patient ${patientName} has been created.`,
-    });
-    setOpen(false);
+    // Use the non-blocking function to add the document
+    addDocumentNonBlocking(bedsCollectionRef, newPatient)
+      .then((docRef) => {
+        // The docRef gives you the reference to the new document, including its ID.
+        // You could use docRef.id if you need it.
+        toast({
+          title: "Bed Added Successfully",
+          description: `Bed ${bedId} for patient ${patientName} has been created.`,
+        });
+        setOpen(false);
+      })
+      .catch((error) => {
+         // Error is handled globally by the non-blocking-updates function
+         // You could add specific UI feedback here if needed
+      });
   };
 
   return (
@@ -106,7 +116,7 @@ function AddBedDialog({ onAddPatient }: { onAddPatient: (newPatient: Patient) =>
               <Label htmlFor="bedId" className="text-right">
                 Bed ID
               </Label>
-              <Input id="bedId" name="bedId" defaultValue={nextBedId} className="col-span-3" required />
+              <Input id="bedId" name="bedId" placeholder="e.g. 101A" className="col-span-3" required />
             </div>
           </div>
           <DialogFooter>
@@ -119,8 +129,8 @@ function AddBedDialog({ onAddPatient }: { onAddPatient: (newPatient: Patient) =>
 }
 
 function PatientCard({ patient }: { patient: Patient }) {
-  const emergencyAlert = patient.alerts.find(a => a.priority === "Emergency")
-  const highAlert = patient.alerts.find(a => a.priority === "High")
+  const emergencyAlert = patient.alerts?.find(a => a.priority === "Emergency")
+  const highAlert = patient.alerts?.find(a => a.priority === "High")
 
   const getAlertVariant = () => {
     if (emergencyAlert) return "destructive"
@@ -173,13 +183,18 @@ function PatientCard({ patient }: { patient: Patient }) {
 }
 
 export default function HospitalDashboard() {
-  const [patients, setPatients] = React.useState<Patient[]>(mockPatients);
+  const firestore = useFirestore();
+  const { user } = useUser();
 
-  const handleAddPatient = (newPatient: Patient) => {
-    setPatients(prevPatients => [...prevPatients, newPatient]);
-    // Also update mockPatients so new patient is available on other pages
-    mockPatients.push(newPatient);
-  };
+  // Memoize the collection query
+  const bedsCollectionQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    // This query points to the subcollection of beds for the currently logged-in user
+    return collection(firestore, `users/${user.uid}/beds`);
+  }, [firestore, user]);
+
+  // Use the useCollection hook to get real-time data
+  const { data: patients, isLoading } = useCollection<Patient>(bedsCollectionQuery);
 
   return (
     <>
@@ -188,13 +203,24 @@ export default function HospitalDashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Hospital Dashboard</h1>
             <p className="text-muted-foreground">Overview of all patient statuses.</p>
         </div>
-        <AddBedDialog onAddPatient={handleAddPatient} />
+        <AddBedDialog />
       </div>
+
+      {isLoading && <p>Loading patients...</p>}
+      
+      {!isLoading && (!patients || patients.length === 0) && (
+        <div className="text-center py-10">
+          <p className="text-muted-foreground">No patients found. Click "Add New Bed" to get started.</p>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {patients.map(patient => (
+        {patients && patients.map(patient => (
           <PatientCard key={patient.id} patient={patient} />
         ))}
       </div>
     </>
   )
 }
+
+    
